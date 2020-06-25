@@ -64,6 +64,7 @@ struct task_struct *last_task_used_math = NULL;
 
 struct task_struct * task[NR_TASKS] = {&(init_task.task), };
 
+struct tss_struct *tss = &(init_task.task.tss);
 long user_stack [ PAGE_SIZE>>2 ] ;
 
 struct {
@@ -105,6 +106,8 @@ void schedule(void)
 {
 	int i,next,c;
 	struct task_struct ** p;
+    // the next pcb
+    struct task_struct *pnext = &(init_task.task);
 
 /* check alarm, wake up any interruptible tasks that have got a signal */
 
@@ -132,7 +135,7 @@ void schedule(void)
 			if (!*--p)
 				continue;
 			if ((*p)->state == TASK_RUNNING && (*p)->counter > c)
-				c = (*p)->counter, next = i;
+				c = (*p)->counter, next = i, pnext = *p;
 		}
 		if (c) break;
 		for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
@@ -146,7 +149,9 @@ void schedule(void)
 	if(task[next]!=current){
 	    fprintk(3,"%ld\t%c\t%ld\n",task[next]->pid,'R',jiffies);
 	}
-	switch_to(next);
+    /* use stack to change process,so just need next pcb and next stack position,
+     * stack and pcb are in a same page,so just need pcb and ldt to proctet different process*/
+	switch_to(pnext,_LDT(next));
 }
 
 int sys_pause(void)

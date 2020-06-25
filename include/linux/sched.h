@@ -29,6 +29,9 @@
 extern int copy_page_tables(unsigned long from, unsigned long to, long size);
 extern int free_page_tables(unsigned long from, unsigned long size);
 
+//add switch_to,first_return_from_kernel declaration
+extern void switch_to(struct task_struct*,long);
+extern void first_return_from_kernel(void);
 extern void sched_init(void);
 extern void schedule(void);
 extern void trap_init(void);
@@ -82,6 +85,8 @@ struct task_struct {
 	long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	long counter;
 	long priority;
+    // add kernel_stack 
+    long kernel_stack;
 	long signal;
 	struct sigaction sigaction[32];
 	long blocked;	/* bitmap of masked signals */
@@ -113,7 +118,7 @@ struct task_struct {
  * your own risk!. Base=0, limit=0x9ffff (=640kB)
  */
 #define INIT_TASK \
-/* state etc */	{ 0,15,15, \
+/* state etc */	{ 0,15,15,PAGE_SIZE+(long)&init_task, \
 /* signals */	0,{{},},0, \
 /* ec,brk... */	0,0,0,0,0,0, \
 /* pid etc.. */	0,-1,0,0,0, \
@@ -135,6 +140,7 @@ struct task_struct {
 	}, \
 }
 
+extern struct task_struct *tss;
 extern struct task_struct *task[NR_TASKS];
 extern struct task_struct *last_task_used_math;
 extern struct task_struct *current;

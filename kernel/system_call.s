@@ -44,13 +44,16 @@ CS		= 0x20
 EFLAGS		= 0x24
 OLDESP		= 0x28
 OLDSS		= 0x2C
+ESP0        = 4
+KERNEL_STACK    = 12
 
 state	= 0		# these are offsets into the task-struct.
 counter	= 4
 priority = 8
-signal	= 12
-sigaction = 16		# MUST be 16 (=len of sigaction)
-blocked = (33*16)
+# add long kernelstack in task_struct,so change the position
+signal	= 12+4
+sigaction = 16+4		# MUST be 16 (=len of sigaction)
+blocked = (33*16+4)
 
 # offsets within sigaction
 sa_handler = 0
@@ -67,6 +70,7 @@ nr_system_calls = 73
 .globl system_call,sys_fork,timer_interrupt,sys_execve
 .globl hd_interrupt,floppy_interrupt,parallel_interrupt
 .globl device_not_available, coprocessor_error
+.globl first_return_from_kernel,switch_to
 
 .align 2
 bad_sys_call:
@@ -284,3 +288,54 @@ parallel_interrupt:
 	outb %al,$0x20
 	popl %eax
 	iret
+
+.align 2
+switch_to:
+    # called by a c funtion,so handle the stack frame
+    pushl %ebp
+    movl %esp,%ebp
+    pushl %ecx
+    pushl %ebx
+    pushl %eax
+    # whether the next equal current
+    movl 8(%ebp),%ebx
+    cmpl %ebx,current
+    je 1f
+    # exchange pcb(task_struct)
+    movl %ebx,%eax
+    xchgl %eax,current
+    movl tss,%ecx
+    addl $4096,%ebx
+    movl %ebx,ESP0(%ecx)
+    # save the current esp to pcb,and get the next esp to cpu
+    movl %esp,KERNEL_STACK(%eax)
+    movl 8(%ebp),%ebx
+    movl KERNEL_STACK(%ebx),%esp
+    # change ldt to Isolate process space
+    movl 12(%ebp),%ecx
+    lldt %cx
+    # reload 0x17 to fs,so flush the Invisible part of fs register
+    movl $0x17,%ecx
+    mov %cx,%fs
+    # handle math Coprocessor
+    cmpl %eax,last_task_used_math
+    jne 1f
+    clts
+    # restore the saved stack frame
+1:  popl %eax
+    popl %ebx
+    popl %ecx
+    popl %ebp
+    # ret from switch_to,and meet the } of schedual,and will return from interrupt,and pop ss esp eflags cs eip
+    ret
+
+first_return_from_kernel:
+    popl %edx
+    popl %edi
+    popl %esi
+    pop %gs
+    pop %fs
+    pop %es
+    pop %ds
+    # pop ss esp eflags cs eip
+    iret

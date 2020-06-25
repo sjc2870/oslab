@@ -74,10 +74,12 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	struct task_struct *p;
 	int i;
 	struct file *f;
+    long *krlstack;     //stack position of kernel,esp register
 
 	p = (struct task_struct *) get_free_page();
 	if (!p)
 		return -EAGAIN;
+    krlstack = (long*)(PAGE_SIZE + (long)p);        //esp position point to begining of stack
 	task[nr] = p;
 	*p = *current;	/* NOTE! this doesn't copy the supervisor stack */
 	p->state = TASK_UNINTERRUPTIBLE;
@@ -90,6 +92,30 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	p->utime = p->stime = 0;
 	p->cutime = p->cstime = 0;
 	p->start_time = jiffies;
+    // initinalize ss esp eflags cs eip,and these 5 registers will save user state by cpu
+    *(--krlstack) = ss & 0xffff;
+    *(--krlstack) = esp;
+    *(--krlstack) = eflags;
+    *(--krlstack) = cs & 0xffff;
+    *(--krlstack) = eip;
+    // these register will be poped in the first_return_from_kernel function
+    *(--krlstack) = ds & 0xffff;
+    *(--krlstack) = es & 0xffff;
+    *(--krlstack) = fs & 0xffff;
+    *(--krlstack) = gs & 0xffff;
+    *(--krlstack) = esi;
+    *(--krlstack) = edi;
+    *(--krlstack) = edx;
+    // the ret will return a fuction address,so push it in advance
+    *(--krlstack) = (long)first_return_from_kernel;
+    // will be poped by switch_to
+    *(--krlstack) = ebp;
+    *(--krlstack) = ecx;
+    *(--krlstack) = ebx;
+    // eax = 0
+    *(--krlstack) = 0;
+    p->kernel_stack = krlstack;
+
 	p->tss.back_link = 0;
 	p->tss.esp0 = PAGE_SIZE + (long) p;
 	p->tss.ss0 = 0x10;
