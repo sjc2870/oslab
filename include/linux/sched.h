@@ -176,6 +176,7 @@ __asm__("str %%ax\n\t" \
  * This also clears the TS-flag if the task we switched to has used
  * tha math co-processor latest.
  */
+/* don't need this switch_to
 #define switch_to(n) {\
 struct {long a,b;} __tmp; \
 __asm__("cmpl %%ecx,current\n\t" \
@@ -190,7 +191,7 @@ __asm__("cmpl %%ecx,current\n\t" \
 	::"m" (*&__tmp.a),"m" (*&__tmp.b), \
 	"d" (_TSS(n)),"c" ((long) task[n])); \
 }
-
+*/
 #define PAGE_ALIGN(n) (((n)+0xfff)&0xfffff000)
 
 #define _set_base(addr,base)  \
